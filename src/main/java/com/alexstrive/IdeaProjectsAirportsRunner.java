@@ -71,7 +71,7 @@ public class IdeaProjectsAirportsRunner {
             prices.sort(Comparator.comparingInt(o -> o));
             var average = prices.stream().mapToInt(Integer::valueOf).sum() / prices.size();
             var median = prices.size() % 2 == 0
-                    ? (prices.get(prices.size() / 2 - 1) + prices.get(prices.size() / 2 + 1 - 1)) / 2
+                    ? (prices.get(prices.size() / 2 - 1) + prices.get(prices.size() / 2)) / 2
                     : prices.get((prices.size() + 1) / 2);
             logger.info(String.format("Average is %s, Median is %s", average, median));
             logger.info(String.format("[2] Difference between average and median is %s ", Math.abs(average - median)));
