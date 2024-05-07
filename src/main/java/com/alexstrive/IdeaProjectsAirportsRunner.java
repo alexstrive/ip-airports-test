@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 public class IdeaProjectsAirportsRunner {
@@ -33,27 +34,31 @@ public class IdeaProjectsAirportsRunner {
         try {
             logger.info("App has been started");
 
-            var graph = initializeGraph();
             var origin = new Airport("VVO");
             var destination = new Airport("TLV");
 
-            var dijkstra = new DijkstraShortestPath(graph);
-            var shortestPath = dijkstra.getPath(origin, destination);
-            var weight = shortestPath.getWeight();
-            var shortestPathValue = Double.valueOf(weight).longValue();
-            var shortestPathDuration = Duration.ofMinutes(shortestPathValue);
-            logger.info(String.format("[1] Shortest airline duration between VVO and TLV is %s hours %s minutes",
-                    shortestPathDuration.toHoursPart(),
-                    shortestPathDuration.toMinutesPart()));
-            logger.info(String.format("    Shortest path is (in minutes) %s", String.join(" -> ", shortestPath.getVertexList().toString())));
+            var tickets = getTickets();
+            var mapPerCarrier = tickets.stream().collect(Collectors.groupingBy(Ticket::getCarrier));
 
+            for (var entry : mapPerCarrier.entrySet()) {
+                var carrier = entry.getKey();
+                var ticketsForCarrier = entry.getValue();
+
+                var graph = initializeGraph(ticketsForCarrier);
+
+                var shortestPathDuration = getShortestDuration(graph, origin, destination);
+                logger.info(String.format("[1] {%s} %s hours %s minutes is shortest airline duration between VVO and TLV ",
+                        carrier,
+                        shortestPathDuration.toHoursPart(),
+                        shortestPathDuration.toMinutesPart()));
+            }
 
             logger.info("");
 
             logger.info("    All possible paths from VVO to TLV: ");
 
-            var allPaths = new AllDirectedPaths(graph).getAllPaths(origin, destination, false, 1_000);
-
+            var totalGraph = initializeGraph(tickets);
+            var allPaths = new AllDirectedPaths(totalGraph).getAllPaths(origin, destination, false, 1_000);
 
             var prices = new ArrayList<Integer>();
             for (Object pathObj : allPaths) {
@@ -64,9 +69,10 @@ public class IdeaProjectsAirportsRunner {
                 logger.info(String.format("    %s (price: %s RUB)", totalPathSequence, totalCostPerPath));
             }
             prices.sort(Comparator.comparingInt(o -> o));
-            var medianIndex = prices.size() % 2 == 0 ? prices.size() / 2 : prices.size() / 2 + 1;
             var average = prices.stream().mapToInt(Integer::valueOf).sum() / prices.size();
-            var median = prices.get(medianIndex);
+            var median = prices.size() % 2 == 0
+                    ? (prices.get(prices.size() / 2) + prices.get(prices.size() / 2 + 1)) / 2
+                    : prices.get((prices.size() + 1) / 2);
             logger.info(String.format("Average is %s, Median is %s", average, median));
             logger.info(String.format("[2] Difference between average and median is %s ", Math.abs(average - median)));
 
@@ -84,7 +90,15 @@ public class IdeaProjectsAirportsRunner {
         }
     }
 
-    public static Graph<Airport, Airline> initializeGraph() throws IOException {
+    public static <T, E> Duration getShortestDuration(Graph<T, E> graph, T origin, T destination) {
+        var dijkstra = new DijkstraShortestPath(graph);
+        var shortestPath = dijkstra.getPath(origin, destination);
+        var weight = shortestPath.getWeight();
+        var shortestPathValue = Double.valueOf(weight).longValue();
+        return Duration.ofMinutes(shortestPathValue);
+    }
+
+    public static List<Ticket> getTickets() throws IOException {
         var objectMapper = new ObjectMapper();
         logger.info("ObjectMapper has been created");
         objectMapper.findAndRegisterModules();
@@ -99,8 +113,13 @@ public class IdeaProjectsAirportsRunner {
             throw new RuntimeException("Unable to find `tickets` member in root json object");
         }
 
-        List<Ticket> tickets = objectMapper.readValue(jsonNode.get("tickets").traverse(), new TypeReference<List<Ticket>>() {
+        List<Ticket> tickets = objectMapper.readValue(jsonNode.get("tickets").traverse(), new TypeReference<>() {
         });
+
+        return tickets;
+    }
+
+    public static Graph<Airport, Airline> initializeGraph(List<Ticket> tickets) throws IOException {
 
         logger.info("Building Airport graph...");
         Graph<Airport, Airline> graph = new DirectedWeightedMultigraph<>(Airline.class);

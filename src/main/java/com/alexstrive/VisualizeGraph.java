@@ -10,7 +10,8 @@ import java.io.IOException;
 
 public class VisualizeGraph {
     public static void main(String... args) throws IOException {
-        var graph = IdeaProjectsAirportsRunner.initializeGraph();
+        var tickets = IdeaProjectsAirportsRunner.getTickets();
+        var graph = IdeaProjectsAirportsRunner.initializeGraph(tickets);
         var adapter = new JGraphXAdapter<>(graph);
 
         var layout = new mxCircleLayout(adapter);
